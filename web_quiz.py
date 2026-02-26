@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 AWS Certification Quiz - Web Interface
-Run with: python3 web_quiz.py
-Then open http://localhost:5000 in your browser.
+Run with: python3 web_quiz.py [port]
+Then open http://localhost:5001 in your browser.
 """
 
 import json
@@ -24,11 +24,20 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-in-production")
 
 SCRIPT_DIR = Path(__file__).parent
-QUESTIONS_FILE = SCRIPT_DIR / "aws_questions.json"
-PROGRESS_FILE = SCRIPT_DIR / ".aws_quiz_progress.json"
+
+CERT_LIST = [
+    {"id": "saa-c03", "name": "Solutions Architect Associate"},
+    {"id": "sap-c02", "name": "Solutions Architect Professional"},
+    {"id": "dva-c02", "name": "Developer Associate"},
+    {"id": "soa-c02", "name": "SysOps Administrator Associate"},
+    {"id": "dop-c02", "name": "DevOps Engineer Professional"},
+    {"id": "scs-c02", "name": "Security Specialty"},
+    {"id": "mls-c01", "name": "Machine Learning Specialty"},
+    {"id": "ans-c01", "name": "Advanced Networking Specialty"},
+]
 
 # ---------------------------------------------------------------------------
-# HTML template (single-file, dark theme)
+# HTML templates (single-file, dark theme)
 # ---------------------------------------------------------------------------
 
 BASE_TEMPLATE = """<!DOCTYPE html>
@@ -230,6 +239,24 @@ BASE_TEMPLATE = """<!DOCTYPE html>
   .flash { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
   .flash-info { background: #0d1b2e; border: 1px solid #1e3a5f; color: var(--blue); }
 
+  /* Cert picker */
+  .cert-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 540px) { .cert-grid { grid-template-columns: 1fr; } }
+  .cert-card {
+    width: 100%; background: var(--surface);
+    border: 2px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; cursor: pointer; text-align: left;
+    transition: border-color .15s, background .15s; color: var(--text);
+  }
+  .cert-card:hover { border-color: var(--aws); background: #1e2030; }
+  .cert-card.cert-available { border-color: var(--green-dim); }
+  .cert-card.cert-available:hover { border-color: var(--green); }
+  .cert-card-id { font-size: 18px; font-weight: 700; color: var(--aws); margin-bottom: 4px; }
+  .cert-card-name { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+  .cert-card-status { font-size: 12px; }
+  .cert-card.cert-available .cert-card-status { color: var(--green); }
+  .cert-card:not(.cert-available) .cert-card-status { color: var(--muted); }
+
   /* Responsive */
   @media (max-width: 540px) {
     .header { flex-wrap: wrap; }
@@ -242,7 +269,9 @@ BASE_TEMPLATE = """<!DOCTYPE html>
 <div class="header">
   <div>
     <div class="header-logo">&#9729; AWS Quiz</div>
-    <div class="header-sub">SAA-C03 Exam Prep</div>
+    {% if cert_name is defined and cert_name %}
+    <div class="header-sub">{{ cert_name }} Exam Prep</div>
+    {% endif %}
   </div>
   <div class="header-right">
     {% if session_pct is defined %}
@@ -251,13 +280,72 @@ BASE_TEMPLATE = """<!DOCTYPE html>
     {% if overall_pct is defined %}
     <div class="header-stat">Overall <span>{{ overall_correct }}/{{ overall_total }}</span> ({{ overall_pct }}%)</div>
     {% endif %}
-    <a href="/" class="btn btn-secondary btn-sm">Menu</a>
+    {% if not hide_menu_btn %}
+    <a href="/menu" class="btn btn-secondary btn-sm">Menu</a>
+    {% endif %}
   </div>
 </div>
 {% block body %}{% endblock %}
 </body>
 </html>
 """
+
+CERT_PICKER_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
+{% block body %}
+<div class="container" style="margin-top:40px">
+  <h1 style="color:var(--aws);margin-bottom:8px">AWS Certification Quiz</h1>
+  <p style="color:var(--muted);margin-bottom:32px">Select a certification to get started.</p>
+
+  <div class="cert-grid">
+    {% for cert in certs %}
+    <form method="post" action="/cert/select" style="display:contents">
+      <input type="hidden" name="cert_id" value="{{ cert.id }}">
+      <button type="submit" class="cert-card{% if cert.available %} cert-available{% endif %}">
+        <div class="cert-card-id">{{ cert.id | upper }}</div>
+        <div class="cert-card-name">{{ cert.name }}</div>
+        <div class="cert-card-status">
+          {% if cert.available %}Questions available{% else %}No questions yet{% endif %}
+        </div>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}""")
+
+CERT_NOT_FOUND_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
+{% block body %}
+<div class="container" style="margin-top:40px;max-width:600px">
+  <div style="font-size:48px;margin-bottom:16px">&#128269;</div>
+  <h1 style="color:var(--red);margin-bottom:8px">Questions Not Found</h1>
+  <p style="color:var(--muted);margin-bottom:24px">
+    No question file found for <strong style="color:var(--text)">{{ cert_name }}</strong>.<br>
+    Expected: <code style="color:var(--yellow)">{{ cert_id }}_questions.json</code>
+  </p>
+
+  {% if has_sample %}
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">Sample Questions Available</div>
+    <p style="color:var(--muted);margin-bottom:16px">
+      A sample question file is available for {{ cert_name }}.
+      Use it to explore the quiz interface.
+    </p>
+    <form method="post" action="/cert/use-sample">
+      <input type="hidden" name="cert_id" value="{{ cert_id }}">
+      <button type="submit" class="btn btn-primary">Use Sample Questions</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-title">Add Questions</div>
+    <p style="color:var(--muted);margin-bottom:12px">Run the parser to generate a question file:</p>
+    <code style="display:block;background:var(--surface2);padding:12px;border-radius:8px;color:var(--yellow);font-size:14px">make parse CERT={{ cert_id }}</code>
+  </div>
+
+  <a href="/" class="btn btn-secondary">&#8592; Back to Cert Picker</a>
+</div>
+{% endblock %}""")
 
 MENU_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
 {% block body %}
@@ -324,7 +412,8 @@ MENU_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
     </a>
   </div>
 
-  <div style="margin-top:8px;text-align:right">
+  <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+    <a href="/" class="btn btn-secondary btn-sm">&#8592; Change Cert</a>
     <form method="post" action="/reset" onsubmit="return confirm('Reset ALL progress? This cannot be undone.')">
       <button type="submit" class="btn btn-danger btn-sm">Reset Progress</button>
     </form>
@@ -356,7 +445,7 @@ DOMAIN_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
     </form>
     {% endfor %}
   </div>
-  <div style="margin-top:16px"><a href="/" class="btn btn-secondary">&#8592; Back</a></div>
+  <div style="margin-top:16px"><a href="/menu" class="btn btn-secondary">&#8592; Back</a></div>
 </div>
 {% endblock %}""")
 
@@ -397,7 +486,7 @@ QUESTION_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
 
   <div style="margin-top:20px;display:flex;gap:10px">
     <a href="/quiz/skip" class="btn btn-secondary btn-sm">Skip</a>
-    <a href="/" class="btn btn-secondary btn-sm">&#x1F3E0; Menu</a>
+    <a href="/menu" class="btn btn-secondary btn-sm">&#x1F3E0; Menu</a>
   </div>
 </div>
 
@@ -465,7 +554,7 @@ RESULT_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
 
   <div style="display:flex;gap:10px">
     <a href="/quiz/next" class="btn btn-primary">Next Question &#8594;</a>
-    <a href="/" class="btn btn-secondary">&#x1F3E0; Menu</a>
+    <a href="/menu" class="btn btn-secondary">&#x1F3E0; Menu</a>
   </div>
 </div>
 {% endblock %}""")
@@ -481,7 +570,7 @@ COMPLETE_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
     <div class="stat-box"><div class="stat-value">{{ session_total }}</div><div class="stat-label">Answered</div></div>
     <div class="stat-box"><div class="stat-value">{{ pct }}%</div><div class="stat-label">Accuracy</div></div>
   </div>
-  <a href="/" class="btn btn-primary">Back to Menu</a>
+  <a href="/menu" class="btn btn-primary">Back to Menu</a>
 </div>
 {% endblock %}""")
 
@@ -524,7 +613,7 @@ STATS_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
   <p style="color:var(--muted);font-size:13px">Last session: {{ last_session }}</p>
   {% endif %}
 
-  <div style="margin-top:16px"><a href="/" class="btn btn-secondary">&#8592; Back</a></div>
+  <div style="margin-top:16px"><a href="/menu" class="btn btn-secondary">&#8592; Back</a></div>
 </div>
 {% endblock %}""")
 
@@ -533,13 +622,22 @@ STATS_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
 # Helpers
 # ---------------------------------------------------------------------------
 
+def files_for_cert(cert_id: str):
+    """Return (questions_path, progress_path) for a given cert ID."""
+    questions_path = SCRIPT_DIR / f"{cert_id}_questions.json"
+    progress_path = SCRIPT_DIR / f".{cert_id}_progress.json"
+    return questions_path, progress_path
+
+
 def get_progress_ctx(progress: Progress, questions: list) -> dict:
     """Build common template context vars for header stats."""
     s_pct = round(progress.current_session_correct / progress.current_session_total * 100
                   if progress.current_session_total > 0 else 0)
     o_pct = round(progress.correct_answers / progress.questions_answered * 100
                   if progress.questions_answered > 0 else 0)
+    cert_id = session.get("cert_id", "")
     return dict(
+        cert_name=cert_id.upper(),
         session_correct=progress.current_session_correct,
         session_total=progress.current_session_total,
         session_pct=s_pct,
@@ -550,9 +648,26 @@ def get_progress_ctx(progress: Progress, questions: list) -> dict:
 
 
 def load_all():
-    questions = load_questions(str(QUESTIONS_FILE))
-    progress = load_progress(str(PROGRESS_FILE))
+    """Load questions and progress for the cert in the current session."""
+    cert_id = session.get("cert_id", "")
+    if not cert_id:
+        return None, None
+    questions_path, progress_path = files_for_cert(cert_id)
+    # Allow sample file override stored in session
+    questions_override = session.get("questions_file")
+    if questions_override:
+        questions_path = Path(questions_override)
+    try:
+        questions = load_questions(str(questions_path))
+    except Exception:
+        return None, None
+    progress = load_progress(str(progress_path))
     return questions, progress
+
+
+def _require_cert():
+    """Return cert_id from session, or None to signal a redirect is needed."""
+    return session.get("cert_id")
 
 
 # ---------------------------------------------------------------------------
@@ -560,8 +675,52 @@ def load_all():
 # ---------------------------------------------------------------------------
 
 @app.route("/")
+def cert_picker():
+    certs = []
+    for c in CERT_LIST:
+        questions_path, _ = files_for_cert(c["id"])
+        certs.append({**c, "available": questions_path.exists()})
+    return render_template_string(CERT_PICKER_TEMPLATE, certs=certs, hide_menu_btn=True)
+
+
+@app.route("/cert/select", methods=["POST"])
+def cert_select():
+    cert_id = request.form.get("cert_id", "").strip().lower()
+    if not cert_id:
+        return redirect(url_for("cert_picker"))
+    questions_path, _ = files_for_cert(cert_id)
+    if questions_path.exists():
+        session["cert_id"] = cert_id
+        session.pop("questions_file", None)
+        return redirect(url_for("menu"))
+    sample_path = SCRIPT_DIR / f"{cert_id}_questions.sample.json"
+    return render_template_string(
+        CERT_NOT_FOUND_TEMPLATE,
+        cert_id=cert_id,
+        cert_name=cert_id.upper(),
+        has_sample=sample_path.exists(),
+        hide_menu_btn=True,
+    )
+
+
+@app.route("/cert/use-sample", methods=["POST"])
+def cert_use_sample():
+    cert_id = request.form.get("cert_id", "").strip().lower()
+    sample_path = SCRIPT_DIR / f"{cert_id}_questions.sample.json"
+    if not sample_path.exists():
+        return redirect(url_for("cert_picker"))
+    session["cert_id"] = cert_id
+    session["questions_file"] = str(sample_path)
+    return redirect(url_for("menu"))
+
+
+@app.route("/menu")
 def menu():
+    if not _require_cert():
+        return redirect(url_for("cert_picker"))
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     weak = len(get_weak_spots(questions, progress))
     pct = round(progress.correct_answers / progress.questions_answered * 100
                 if progress.questions_answered > 0 else 0)
@@ -580,7 +739,11 @@ def menu():
 
 @app.route("/domain")
 def domain_page():
+    if not _require_cert():
+        return redirect(url_for("cert_picker"))
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     domains = get_domains(questions)
     domain_list = [(d, len([q for q in questions if d in q.domain])) for d in domains]
     ctx = get_progress_ctx(progress, questions)
@@ -590,14 +753,20 @@ def domain_page():
 
 @app.route("/quiz/start", methods=["POST"])
 def quiz_start():
+    if not _require_cert():
+        return redirect(url_for("cert_picker"))
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     mode = request.form.get("mode", "random")
     domain = request.form.get("domain", "all")
+
+    _, progress_path = files_for_cert(session["cert_id"])
 
     # Reset session quiz state
     progress.current_session_correct = 0
     progress.current_session_total = 0
-    save_progress(progress, str(PROGRESS_FILE))
+    save_progress(progress, str(progress_path))
 
     if mode == "random":
         q_list = questions.copy()
@@ -630,10 +799,12 @@ def quiz_start():
 
 @app.route("/quiz")
 def quiz_question():
-    if "quiz_indices" not in session:
-        return redirect(url_for("menu"))
+    if not _require_cert() or "quiz_indices" not in session:
+        return redirect(url_for("cert_picker"))
 
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     q_map = {q.number: q for q in questions}
 
     indices = session["quiz_indices"]
@@ -664,10 +835,12 @@ def quiz_question():
 
 @app.route("/quiz/answer", methods=["POST"])
 def quiz_answer():
-    if "quiz_indices" not in session:
-        return redirect(url_for("menu"))
+    if not _require_cert() or "quiz_indices" not in session:
+        return redirect(url_for("cert_picker"))
 
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     q_map = {q.number: q for q in questions}
 
     q_number = int(request.form.get("q_number", 0))
@@ -699,7 +872,8 @@ def quiz_answer():
         progress.current_session_correct += 1
         progress.correct_answers += 1
 
-    save_progress(progress, str(PROGRESS_FILE))
+    _, progress_path = files_for_cert(session["cert_id"])
+    save_progress(progress, str(progress_path))
 
     # Determine correct set
     if multi > 1:
@@ -745,7 +919,11 @@ def quiz_skip():
 
 @app.route("/quiz/complete")
 def quiz_complete():
+    if not _require_cert():
+        return redirect(url_for("cert_picker"))
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     pct = round(progress.current_session_correct / progress.current_session_total * 100
                 if progress.current_session_total > 0 else 0)
     ctx = get_progress_ctx(progress, questions)
@@ -759,7 +937,11 @@ def quiz_complete():
 
 @app.route("/stats")
 def stats():
+    if not _require_cert():
+        return redirect(url_for("cert_picker"))
     questions, progress = load_all()
+    if questions is None:
+        return redirect(url_for("cert_picker"))
     domains = get_domains(questions)
     domain_stats = []
     for domain in domains:
@@ -786,9 +968,12 @@ def stats():
 
 @app.route("/reset", methods=["POST"])
 def reset():
+    cert_id = session.get("cert_id", "")
+    _, progress_path = files_for_cert(cert_id)
     progress = Progress()
-    save_progress(progress, str(PROGRESS_FILE))
+    save_progress(progress, str(progress_path))
     session.clear()
+    session["cert_id"] = cert_id
     session["flash_msg"] = "Progress has been reset."
     return redirect(url_for("menu"))
 
@@ -798,9 +983,6 @@ def reset():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    if not QUESTIONS_FILE.exists():
-        print(f"Error: {QUESTIONS_FILE} not found. Run parse_questions.py first.")
-        sys.exit(1)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
     print(f"Starting AWS Quiz web server at http://localhost:{port}")
     print("Press Ctrl+C to stop.")

@@ -13,6 +13,18 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 
+_cert_name = ""  # set by main(); used by print_header()
+
+
+def cert_name_from_path(path: Path) -> str:
+    """'saa-c03_questions.json' → 'SAA-C03'"""
+    return path.stem.replace("_questions", "").upper()
+
+
+def progress_path_from_questions(questions_path: Path) -> Path:
+    cert_id = cert_name_from_path(questions_path).lower()
+    return questions_path.parent / f".{cert_id}_progress.json"
+
 
 @dataclass
 class Question:
@@ -124,6 +136,9 @@ def save_progress(progress: Progress, progress_file: str):
 def print_header():
     print(colorize("╔════════════════════════════════════════════════════════════╗", Colors.CYAN))
     print(colorize("║           AWS Certification Quiz Tool                      ║", Colors.CYAN))
+    if _cert_name:
+        line = f"  {_cert_name}"
+        print(colorize(f"║{line.ljust(60)}║", Colors.CYAN))
     print(colorize("╚════════════════════════════════════════════════════════════╝", Colors.CYAN))
     print()
 
@@ -449,13 +464,38 @@ def reset_progress(progress: Progress, progress_file: str) -> Progress:
 
 
 def main():
+    global _cert_name
     script_dir = Path(__file__).parent
-    questions_file = script_dir / "aws_questions.json"
-    progress_file = script_dir / ".aws_quiz_progress.json"
 
-    # Allow custom questions file
     if len(sys.argv) > 1:
-        questions_file = Path(sys.argv[1])
+        arg = sys.argv[1]
+        arg_path = Path(arg)
+        if arg_path.suffix == ".json" or arg_path.exists():
+            questions_file = arg_path
+        else:
+            questions_file = script_dir / f"{arg}_questions.json"
+    else:
+        candidates = sorted(script_dir.glob("*_questions.json"))
+        if len(candidates) == 1:
+            questions_file = candidates[0]
+        elif len(candidates) > 1:
+            print(colorize("Multiple question files found. Please choose:", Colors.YELLOW))
+            for i, p in enumerate(candidates, 1):
+                print(f"  {i}. {p.name}")
+            choice = input(colorize("Enter number: ", Colors.YELLOW)).strip()
+            try:
+                questions_file = candidates[int(choice) - 1]
+            except (ValueError, IndexError):
+                print(colorize("Invalid choice.", Colors.RED))
+                sys.exit(1)
+        else:
+            print(colorize("Error: No *_questions.json file found in script directory.", Colors.RED))
+            print("Run parse_questions.py first or pass a cert ID as argument.")
+            sys.exit(1)
+
+    questions_file = Path(questions_file)
+    progress_file = progress_path_from_questions(questions_file)
+    _cert_name = cert_name_from_path(questions_file)
 
     if not questions_file.exists():
         print(colorize(f"Error: Questions file not found: {questions_file}", Colors.RED))

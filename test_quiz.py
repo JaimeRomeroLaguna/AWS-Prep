@@ -13,7 +13,7 @@ from parse_questions import (
     extract_multi_answers,
 )
 
-QUESTIONS_FILE = Path(__file__).parent / "aws_questions.json"
+QUESTIONS_FILE = Path(__file__).parent / "saa-c03_questions.sample.json"
 
 
 def make_question(text="Sample question?", correct_answer="A", options=None):
@@ -183,7 +183,7 @@ class TestDisplayResult(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Integration: validate aws_questions.json
 # ---------------------------------------------------------------------------
-@unittest.skipUnless(QUESTIONS_FILE.exists(), "aws_questions.json not found")
+@unittest.skipUnless(QUESTIONS_FILE.exists(), "saa-c03_questions.sample.json not found")
 class TestQuestionsJson(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -191,7 +191,7 @@ class TestQuestionsJson(unittest.TestCase):
             cls.data = json.load(f)
 
     def test_has_questions(self):
-        self.assertGreater(len(self.data), 400)
+        self.assertGreater(len(self.data), 0)
 
     def test_all_correct_answers_reference_valid_options(self):
         for q in self.data:

@@ -4,6 +4,7 @@ Parse AWS exam questions from PDF text and solutions file,
 combining them into a structured JSON file.
 """
 
+import argparse
 import json
 import re
 from pathlib import Path
@@ -250,11 +251,26 @@ def combine_questions_and_answers(questions: dict, answers: dict) -> list:
 def main():
     script_dir = Path(__file__).parent
 
-    pdf_text_path = script_dir / "questions_raw.txt"
-    solutions_path = script_dir / "AWS SAA-03 Solution.txt"
-    output_path = script_dir / "aws_questions.json"
+    parser = argparse.ArgumentParser(description="Parse AWS exam questions into JSON")
+    parser.add_argument("--cert", default="saa-c03",
+                        help="Cert ID (e.g. saa-c03). Sets default --solutions and --output.")
+    parser.add_argument("--input", default=None,
+                        help="Raw questions text file (default: questions_raw.txt)")
+    parser.add_argument("--solutions", default=None,
+                        help="Solutions text file (default: AWS {CERT}-Solution.txt)")
+    parser.add_argument("--output", default=None,
+                        help="Output JSON file (default: {cert}_questions.json)")
+    args = parser.parse_args()
 
-    print("Parsing questions from PDF...")
+    cert = args.cert.lower()
+    cert_upper = cert.upper()
+
+    pdf_text_path = Path(args.input) if args.input else script_dir / "questions_raw.txt"
+    solutions_path = (Path(args.solutions) if args.solutions
+                      else script_dir / f"AWS {cert_upper}-Solution.txt")
+    output_path = Path(args.output) if args.output else script_dir / f"{cert}_questions.json"
+
+    print(f"Parsing questions for {cert_upper}...")
     questions = parse_questions_from_pdf(str(pdf_text_path))
     print(f"Found {len(questions)} questions in PDF")
 

@@ -7,5 +7,6 @@ venv/
 # Question data — copyrighted source material, not for public distribution
 *.pdf
 questions_raw.txt
-aws_questions.json
+*_questions.json
+!*_questions.sample.json
 AWS\ SAA-03\ Solution.txt
