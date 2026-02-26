@@ -227,18 +227,35 @@ def filter_by_domain(questions: list, domain: str) -> list:
     return [q for q in questions if domain.lower() in q.domain.lower()]
 
 
+def get_weak_spots(questions: list, progress: Progress) -> list:
+    """Return questions the user has gotten wrong, sorted by worst accuracy."""
+    weak = []
+    for q in questions:
+        stats = progress.question_stats.get(str(q.number))
+        if stats and stats['seen'] > stats['correct']:
+            weak.append(q)
+    # Sort by accuracy ascending (worst first)
+    weak.sort(key=lambda q: progress.question_stats[str(q.number)]['correct']
+              / progress.question_stats[str(q.number)]['seen'])
+    return weak
+
+
 def show_menu(questions: list, progress: Progress) -> str:
     clear_screen()
     print_header()
     print_stats(progress, len(questions))
+
+    weak_count = len(get_weak_spots(questions, progress))
 
     print(colorize("MENU:", Colors.BOLD))
     print("  1. Start quiz (random order)")
     print("  2. Start quiz (sequential)")
     print("  3. Resume from last position")
     print("  4. Filter by domain/topic")
-    print("  5. View statistics")
-    print("  6. Reset progress")
+    print(f"  5. Weak spots ({weak_count} questions)" if weak_count else
+          "  5. Weak spots (none yet)")
+    print("  6. View statistics")
+    print("  7. Reset progress")
     print("  q. Quit")
     print()
 
