@@ -1,0 +1,38 @@
+[
+  {
+    "number": 1,
+    "question": "A company needs to store objects that are accessed frequently for the first 30 days, then rarely accessed for the next 90 days, and then deleted. Which S3 lifecycle policy meets these requirements MOST cost-effectively?",
+    "options": {
+      "A": "S3 Standard for 30 days, then transition to S3 Standard-IA for 90 days, then delete",
+      "B": "S3 Standard for 30 days, then transition to S3 Glacier for 90 days, then delete",
+      "C": "S3 Intelligent-Tiering for the entire duration",
+      "D": "S3 Standard-IA for the entire duration, then delete after 120 days"
+    },
+    "correct_answer": "A",
+    "explanation": "S3 Standard is best for frequently accessed data. S3 Standard-IA suits infrequently accessed data with lower storage cost but per-retrieval charges. Glacier would be too slow for 'rarely but still accessed' data. Intelligent-Tiering adds monitoring costs that may not be justified here."
+  },
+  {
+    "number": 2,
+    "question": "A solutions architect needs to design a highly available architecture for a web application. Which combination of AWS services provides the BEST high availability? (Choose two)",
+    "options": {
+      "A": "Deploy EC2 instances in multiple Availability Zones behind an Application Load Balancer",
+      "B": "Deploy EC2 instances in a single Availability Zone with enhanced networking",
+      "C": "Use Amazon RDS Multi-AZ for the database layer",
+      "D": "Store all application state in EC2 instance storage"
+    },
+    "correct_answer": "AC",
+    "explanation": "Multi-AZ EC2 deployments with an ALB eliminate single points of failure. RDS Multi-AZ provides automatic failover for the database. Instance storage is ephemeral and tied to a single instance, which is not highly available."
+  },
+  {
+    "number": 3,
+    "question": "A company wants to allow users to sign in with their existing Google credentials to access a mobile application backed by AWS services. What is the SIMPLEST way to achieve this?",
+    "options": {
+      "A": "Create an IAM user for each Google account",
+      "B": "Use Amazon Cognito User Pools with a Google federated identity provider",
+      "C": "Build a custom OAuth2 server on EC2",
+      "D": "Use AWS Directory Service to sync Google accounts"
+    },
+    "correct_answer": "B",
+    "explanation": "Amazon Cognito supports social identity providers like Google out of the box, handling token exchange and issuing temporary AWS credentials. Creating IAM users per end-user is not scalable and is an anti-pattern."
+  }
+]

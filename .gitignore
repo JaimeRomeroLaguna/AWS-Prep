@@ -3,3 +3,9 @@ __pycache__/
 .aws_quiz_progress.json
 .venv/
 venv/
+
+# Question data — copyrighted source material, not for public distribution
+*.pdf
+questions_raw.txt
+aws_questions.json
+AWS\ SAA-03\ Solution.txt

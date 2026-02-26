@@ -6,6 +6,7 @@ Then open http://localhost:5000 in your browser.
 """
 
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -20,7 +21,7 @@ from aws_quiz import (
 )
 
 app = Flask(__name__)
-app.secret_key = "aws-quiz-web-secret-key"
+app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-in-production")
 
 SCRIPT_DIR = Path(__file__).parent
 QUESTIONS_FILE = SCRIPT_DIR / "aws_questions.json"
