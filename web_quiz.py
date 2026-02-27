@@ -27,6 +27,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-in-production")
 SCRIPT_DIR = Path(__file__).parent
 
 CERT_LIST = [
+    {"id": "clf-c02", "name": "Cloud Practitioner"},
     {"id": "saa-c03", "name": "Solutions Architect Associate"},
     {"id": "sap-c02", "name": "Solutions Architect Professional"},
     {"id": "dva-c02", "name": "Developer Associate"},
