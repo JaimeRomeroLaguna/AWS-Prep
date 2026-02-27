@@ -3,6 +3,11 @@
 A terminal and web-based multiple-choice quiz for AWS certification exam prep.
 Supports any AWS certification — just drop in the right question file.
 
+> **Note on question files:** This repo ships with a small sample question file
+> for demo purposes. It does **not** include any real exam questions. You must
+> supply your own `{cert_id}_questions.json` — do not add copyrighted exam dumps
+> or braindump material to this repository.
+
 ---
 
 ## Getting started
