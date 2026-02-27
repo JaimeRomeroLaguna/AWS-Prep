@@ -123,6 +123,8 @@ BASE_TEMPLATE = """<!DOCTYPE html>
   /* Menu grid */
   .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 540px) { .menu-grid { grid-template-columns: 1fr; } }
+  .menu-grid > form { display: flex; }
+  .menu-grid > form > .menu-btn { flex: 1; }
   .menu-btn {
     background: var(--surface2); border: 1px solid var(--border);
     border-radius: 10px; padding: 16px 20px; cursor: pointer;
