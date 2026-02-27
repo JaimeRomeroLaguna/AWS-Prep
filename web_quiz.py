@@ -305,19 +305,27 @@ CERT_PICKER_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", "
   <p style="color:var(--muted);margin-bottom:32px">Select a certification to get started.</p>
 
   {% set tiers = ["Foundational", "Associate", "Professional", "Specialty"] %}
+  {% set tier_colors = {
+    "Foundational": "#4ade80",
+    "Associate":    "#60a5fa",
+    "Professional": "#ff9900",
+    "Specialty":    "#c084fc"
+  } %}
   {% for tier in tiers %}
+  {% set color = tier_colors[tier] %}
   {% set tier_certs = certs | selectattr("tier", "equalto", tier) | list %}
   {% if tier_certs %}
   <div style="margin-bottom:28px">
     <div style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-                color:var(--muted);margin-bottom:12px;padding-bottom:6px;
-                border-bottom:1px solid var(--border)">{{ tier }}</div>
+                color:{{ color }};margin-bottom:12px;padding-bottom:6px;
+                border-bottom:1px solid {{ color }}40">{{ tier }}</div>
     <div class="cert-grid">
       {% for cert in tier_certs %}
       <form method="post" action="/cert/select" style="display:contents">
         <input type="hidden" name="cert_id" value="{{ cert.id }}">
-        <button type="submit" class="cert-card{% if cert.available %} cert-available{% endif %}">
-          <div class="cert-card-id">{{ cert.id | upper }}</div>
+        <button type="submit" class="cert-card{% if cert.available %} cert-available{% endif %}"
+                style="border-color:{{ color }}40">
+          <div class="cert-card-id" style="color:{{ color }}">{{ cert.id | upper }}</div>
           <div class="cert-card-name">{{ cert.name }}</div>
           <div class="cert-card-status">
             {% if cert.available %}Questions available{% else %}No questions yet{% endif %}
