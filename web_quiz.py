@@ -28,18 +28,18 @@ SCRIPT_DIR = Path(__file__).parent
 
 CERT_LIST = [
     # Foundational
-    {"id": "clf-c02", "name": "Cloud Practitioner"},
+    {"id": "clf-c02", "name": "Cloud Practitioner",              "tier": "Foundational"},
     # Associate
-    {"id": "saa-c03", "name": "Solutions Architect Associate"},
-    {"id": "dva-c02", "name": "Developer Associate"},
-    {"id": "soa-c02", "name": "SysOps Administrator Associate"},
+    {"id": "saa-c03", "name": "Solutions Architect Associate",   "tier": "Associate"},
+    {"id": "dva-c02", "name": "Developer Associate",             "tier": "Associate"},
+    {"id": "soa-c02", "name": "SysOps Administrator Associate",  "tier": "Associate"},
     # Professional
-    {"id": "sap-c02", "name": "Solutions Architect Professional"},
-    {"id": "dop-c02", "name": "DevOps Engineer Professional"},
+    {"id": "sap-c02", "name": "Solutions Architect Professional","tier": "Professional"},
+    {"id": "dop-c02", "name": "DevOps Engineer Professional",    "tier": "Professional"},
     # Specialty
-    {"id": "scs-c02", "name": "Security Specialty"},
-    {"id": "ans-c01", "name": "Advanced Networking Specialty"},
-    {"id": "mls-c01", "name": "Machine Learning Specialty"},
+    {"id": "scs-c02", "name": "Security Specialty",              "tier": "Specialty"},
+    {"id": "ans-c01", "name": "Advanced Networking Specialty",   "tier": "Specialty"},
+    {"id": "mls-c01", "name": "Machine Learning Specialty",      "tier": "Specialty"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -304,20 +304,31 @@ CERT_PICKER_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", "
   <h1 style="color:var(--aws);margin-bottom:8px">AWS Certification Quiz</h1>
   <p style="color:var(--muted);margin-bottom:32px">Select a certification to get started.</p>
 
-  <div class="cert-grid">
-    {% for cert in certs %}
-    <form method="post" action="/cert/select" style="display:contents">
-      <input type="hidden" name="cert_id" value="{{ cert.id }}">
-      <button type="submit" class="cert-card{% if cert.available %} cert-available{% endif %}">
-        <div class="cert-card-id">{{ cert.id | upper }}</div>
-        <div class="cert-card-name">{{ cert.name }}</div>
-        <div class="cert-card-status">
-          {% if cert.available %}Questions available{% else %}No questions yet{% endif %}
-        </div>
-      </button>
-    </form>
-    {% endfor %}
+  {% set tiers = ["Foundational", "Associate", "Professional", "Specialty"] %}
+  {% for tier in tiers %}
+  {% set tier_certs = certs | selectattr("tier", "equalto", tier) | list %}
+  {% if tier_certs %}
+  <div style="margin-bottom:28px">
+    <div style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                color:var(--muted);margin-bottom:12px;padding-bottom:6px;
+                border-bottom:1px solid var(--border)">{{ tier }}</div>
+    <div class="cert-grid">
+      {% for cert in tier_certs %}
+      <form method="post" action="/cert/select" style="display:contents">
+        <input type="hidden" name="cert_id" value="{{ cert.id }}">
+        <button type="submit" class="cert-card{% if cert.available %} cert-available{% endif %}">
+          <div class="cert-card-id">{{ cert.id | upper }}</div>
+          <div class="cert-card-name">{{ cert.name }}</div>
+          <div class="cert-card-status">
+            {% if cert.available %}Questions available{% else %}No questions yet{% endif %}
+          </div>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
   </div>
+  {% endif %}
+  {% endfor %}
 </div>
 {% endblock %}""")
 
