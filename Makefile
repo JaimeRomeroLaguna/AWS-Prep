@@ -18,7 +18,7 @@ quiz:
 
 # Run the quiz (web) - port 5001 (macOS reserves 5000 for AirPlay)
 web:
-	venv/bin/python3 web_quiz.py 5001
+	@set -a && [ -f .env ] && . ./.env; set +a; venv/bin/python3 web_quiz.py 5001
 
 # Run tests
 test:

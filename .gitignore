@@ -3,6 +3,7 @@ __pycache__/
 .aws_quiz_progress.json
 .venv/
 venv/
+.env
 
 # Question data — copyrighted source material, not for public distribution
 *.pdf
