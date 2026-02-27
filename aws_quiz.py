@@ -271,6 +271,7 @@ def show_menu(questions: list, progress: Progress) -> str:
           "  5. Weak spots (none yet)")
     print("  6. View statistics")
     print("  7. Reset progress")
+    print("  e. Timed Exam (65 questions, 130 min)")
     print("  q. Quit")
     print()
 
@@ -340,6 +341,88 @@ def show_statistics(questions: list, progress: Progress):
     input(colorize("Press Enter to continue...", Colors.DIM))
 
 
+def _answer_question(question: Question, progress: Progress, progress_file: str,
+                     index: int) -> bool:
+    """Prompt the user for an answer to one question. Updates progress in place.
+
+    Returns True to continue to the next question, False if the user quit.
+    """
+    valid_options = set(question.options.keys())
+    valid_options_str = '/'.join(sorted(valid_options))
+    multi = is_multi_select(question)
+
+    if multi > 1:
+        print(colorize(f"Select {multi} answers (e.g. AB), 'q' to quit, 's' to skip:", Colors.DIM))
+    else:
+        print(colorize(f"Enter your answer ({valid_options_str}), 'q' to quit, 's' to skip:", Colors.DIM))
+    print()
+
+    while True:
+        user_input = input(colorize("Your answer: ", Colors.YELLOW)).strip().upper()
+
+        if user_input == 'Q':
+            save_progress(progress, progress_file)
+            return False
+
+        if user_input == 'S':
+            return True
+
+        # Normalize input: remove separators like commas, spaces
+        cleaned = re.sub(r'[\s,/]+', '', user_input)
+
+        if multi > 1:
+            # Multi-select: need exactly `multi` unique valid letters
+            letters = list(dict.fromkeys(cleaned))  # unique, preserve order
+            if len(letters) == multi and all(l in valid_options for l in letters):
+                user_answer = ''.join(letters)
+                is_correct = set(user_answer) == set(question.correct_answer)
+
+                progress.current_session_total += 1
+                progress.questions_answered += 1
+                progress.last_question_index = index
+
+                q_key = str(question.number)
+                if q_key not in progress.question_stats:
+                    progress.question_stats[q_key] = {'seen': 0, 'correct': 0}
+                progress.question_stats[q_key]['seen'] += 1
+
+                if is_correct:
+                    progress.current_session_correct += 1
+                    progress.correct_answers += 1
+                    progress.question_stats[q_key]['correct'] += 1
+
+                display_result(question, user_answer, is_correct)
+                save_progress(progress, progress_file)
+                input(colorize("Press Enter for next question...", Colors.DIM))
+                return True
+            else:
+                print(colorize(f"Please enter exactly {multi} valid options (e.g. AB)", Colors.RED))
+        else:
+            if cleaned in valid_options:
+                is_correct = cleaned == question.correct_answer
+
+                progress.current_session_total += 1
+                progress.questions_answered += 1
+                progress.last_question_index = index
+
+                q_key = str(question.number)
+                if q_key not in progress.question_stats:
+                    progress.question_stats[q_key] = {'seen': 0, 'correct': 0}
+                progress.question_stats[q_key]['seen'] += 1
+
+                if is_correct:
+                    progress.current_session_correct += 1
+                    progress.correct_answers += 1
+                    progress.question_stats[q_key]['correct'] += 1
+
+                display_result(question, cleaned, is_correct)
+                save_progress(progress, progress_file)
+                input(colorize("Press Enter for next question...", Colors.DIM))
+                return True
+            else:
+                print(colorize(f"Invalid option. Please enter {valid_options_str}", Colors.RED))
+
+
 def run_quiz(questions: list, progress: Progress, progress_file: str,
              randomize: bool = True, start_index: int = 0):
     if not questions:
@@ -360,86 +443,9 @@ def run_quiz(questions: list, progress: Progress, progress_file: str,
         clear_screen()
         print_header()
         print_stats(progress, len(questions))
-
         display_question(question, i, len(quiz_questions))
-
-        # Get valid options
-        valid_options = set(question.options.keys())
-        valid_options_str = '/'.join(sorted(valid_options))
-        multi = is_multi_select(question)
-
-        if multi > 1:
-            print(colorize(f"Select {multi} answers (e.g. AB), 'q' to quit, 's' to skip:", Colors.DIM))
-        else:
-            print(colorize(f"Enter your answer ({valid_options_str}), 'q' to quit, 's' to skip:", Colors.DIM))
-        print()
-
-        while True:
-            user_input = input(colorize("Your answer: ", Colors.YELLOW)).strip().upper()
-
-            if user_input == 'Q':
-                save_progress(progress, progress_file)
-                return
-
-            if user_input == 'S':
-                break
-
-            # Normalize input: remove separators like commas, spaces
-            cleaned = re.sub(r'[\s,/]+', '', user_input)
-
-            if multi > 1:
-                # Multi-select: need exactly `multi` unique valid letters
-                letters = list(dict.fromkeys(cleaned))  # unique, preserve order
-                if len(letters) == multi and all(l in valid_options for l in letters):
-                    user_answer = ''.join(letters)
-                    is_correct = set(user_answer) == set(question.correct_answer)
-
-                    progress.current_session_total += 1
-                    progress.questions_answered += 1
-                    progress.last_question_index = i
-
-                    q_key = str(question.number)
-                    if q_key not in progress.question_stats:
-                        progress.question_stats[q_key] = {'seen': 0, 'correct': 0}
-                    progress.question_stats[q_key]['seen'] += 1
-
-                    if is_correct:
-                        progress.current_session_correct += 1
-                        progress.correct_answers += 1
-                        progress.question_stats[q_key]['correct'] += 1
-
-                    display_result(question, user_answer, is_correct)
-
-                    save_progress(progress, progress_file)
-                    input(colorize("Press Enter for next question...", Colors.DIM))
-                    break
-                else:
-                    print(colorize(f"Please enter exactly {multi} valid options (e.g. AB)", Colors.RED))
-            else:
-                if cleaned in valid_options:
-                    is_correct = cleaned == question.correct_answer
-
-                    progress.current_session_total += 1
-                    progress.questions_answered += 1
-                    progress.last_question_index = i
-
-                    q_key = str(question.number)
-                    if q_key not in progress.question_stats:
-                        progress.question_stats[q_key] = {'seen': 0, 'correct': 0}
-                    progress.question_stats[q_key]['seen'] += 1
-
-                    if is_correct:
-                        progress.current_session_correct += 1
-                        progress.correct_answers += 1
-                        progress.question_stats[q_key]['correct'] += 1
-
-                    display_result(question, cleaned, is_correct)
-
-                    save_progress(progress, progress_file)
-                    input(colorize("Press Enter for next question...", Colors.DIM))
-                    break
-                else:
-                    print(colorize(f"Invalid option. Please enter {valid_options_str}", Colors.RED))
+        if not _answer_question(question, progress, progress_file, i):
+            return
 
     # Quiz complete
     clear_screen()
@@ -448,6 +454,55 @@ def run_quiz(questions: list, progress: Progress, progress_file: str,
     print()
     print_stats(progress, len(questions))
     print()
+    input(colorize("Press Enter to continue...", Colors.DIM))
+
+
+def _print_exam_results(progress: Progress, time_used_s: float, total: int):
+    clear_screen()
+    print_header()
+    correct = progress.current_session_correct
+    answered = progress.current_session_total
+    pct = round(correct / answered * 100 if answered else 0)
+    passed = pct >= 72
+    mins, secs = int(time_used_s // 60), int(time_used_s % 60)
+    verdict_color = Colors.GREEN if passed else Colors.RED
+    print(colorize("═" * 62, verdict_color))
+    print(colorize(
+        f"  {'PASS' if passed else 'FAIL'} — {pct}%  "
+        f"({'≥' if passed else '<'}72% threshold)", verdict_color + Colors.BOLD))
+    print(colorize("═" * 62, verdict_color))
+    print()
+    print(f"  Score:     {correct} / {answered} correct  ({total} question exam)")
+    print(f"  Time used: {mins}:{secs:02d} / 130:00")
+    print(colorize("  AWS uses scaled scoring; 72% is an approximation.", Colors.DIM))
+    print()
+
+
+def run_timed_exam(questions: list, progress: Progress, progress_file: str):
+    import time
+    exam_qs = random.sample(questions, min(65, len(questions)))
+    end_time = time.time() + 130 * 60
+    progress.current_session_correct = 0
+    progress.current_session_total = 0
+
+    for i, question in enumerate(exam_qs):
+        remaining = end_time - time.time()
+        if remaining <= 0:
+            break
+        clear_screen()
+        print_header()
+        mins, secs = int(remaining // 60), int(remaining % 60)
+        timer_color = Colors.RED if remaining < 300 else Colors.YELLOW
+        print(colorize(
+            f"  TIMED EXAM  |  {mins}:{secs:02d} remaining  |  "
+            f"{i+1}/{len(exam_qs)}", timer_color))
+        print_stats(progress, len(questions))
+        display_question(question, i, len(exam_qs))
+        if not _answer_question(question, progress, progress_file, i):
+            break  # user quit early
+
+    time_used_s = time.time() - (end_time - 130 * 60)
+    _print_exam_results(progress, time_used_s, len(exam_qs))
     input(colorize("Press Enter to continue...", Colors.DIM))
 
 
@@ -533,6 +588,8 @@ def main():
             show_statistics(questions, progress)
         elif choice == '6':
             progress = reset_progress(progress, str(progress_file))
+        elif choice.lower() == 'e':
+            run_timed_exam(questions, progress, str(progress_file))
         elif choice.lower() == 'q':
             save_progress(progress, str(progress_file))
             clear_screen()

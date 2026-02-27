@@ -9,6 +9,7 @@ import json
 import os
 import random
 import sys
+import time
 from pathlib import Path
 from flask import Flask, session, redirect, url_for, request, render_template_string
 
@@ -410,6 +411,14 @@ MENU_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
       <div class="menu-btn-title">Statistics</div>
       <div class="menu-btn-desc">Detailed breakdown by domain</div>
     </a>
+    <form method="post" action="/quiz/start">
+      <input type="hidden" name="mode" value="exam">
+      <button type="submit" class="menu-btn" style="border-color:var(--aws-dim)">
+        <div class="menu-btn-icon">&#9200;</div>
+        <div class="menu-btn-title">Timed Exam</div>
+        <div class="menu-btn-desc">65 questions · 130 minutes</div>
+      </button>
+    </form>
   </div>
 
   <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
@@ -460,6 +469,12 @@ QUESTION_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
     <span class="badge">{{ idx + 1 }} / {{ total }}</span>
     {% if domain %}<span class="badge">{{ domain }}</span>{% endif %}
     {% if multi > 1 %}<span class="badge" style="color:var(--yellow);border-color:var(--yellow)">Select {{ multi }}</span>{% endif %}
+    {% if exam_end %}
+    <span class="badge" id="exam-timer"
+      style="color:var(--yellow);border-color:var(--yellow);min-width:64px;text-align:center">
+      --:--
+    </span>
+    {% endif %}
   </div>
 
   <div class="question-text">{{ question_text }}</div>
@@ -512,6 +527,24 @@ function autoSubmit() {
   });
   setTimeout(function(){ document.getElementById('quiz-form').submit(); }, 180);
 }
+{% endif %}
+{% if exam_end %}
+(function() {
+  var endMs = {{ exam_end }} * 1000;
+  var badge = document.getElementById('exam-timer');
+  function tick() {
+    var rem = Math.max(0, Math.round((endMs - Date.now()) / 1000));
+    var m = Math.floor(rem / 60), s = rem % 60;
+    badge.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    if (rem <= 300) {
+      badge.style.color = 'var(--red)';
+      badge.style.borderColor = 'var(--red-dim)';
+    }
+    if (rem <= 0) { window.location.href = '/quiz/complete'; return; }
+    setTimeout(tick, 1000);
+  }
+  tick();
+})();
 {% endif %}
 </script>
 {% endblock %}""")
@@ -570,6 +603,37 @@ COMPLETE_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
     <div class="stat-box"><div class="stat-value">{{ session_total }}</div><div class="stat-label">Answered</div></div>
     <div class="stat-box"><div class="stat-value">{{ pct }}%</div><div class="stat-label">Accuracy</div></div>
   </div>
+  <a href="/menu" class="btn btn-primary">Back to Menu</a>
+</div>
+{% endblock %}""")
+
+EXAM_COMPLETE_TEMPLATE = BASE_TEMPLATE.replace("{% block body %}{% endblock %}", """
+{% block body %}
+<div class="container" style="margin-top:40px;text-align:center">
+  <div class="result-banner {{ 'result-correct' if passed else 'result-incorrect' }}"
+       style="justify-content:center;font-size:22px;margin-bottom:24px">
+    {{ '&#10003; PASS' if passed else '&#10007; FAIL' }} &mdash; {{ pct }}%
+    &nbsp;({{ '&ge;' if passed else '&lt;' }}72% threshold)
+  </div>
+
+  <div style="display:flex;gap:32px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
+    <div class="stat-box">
+      <div class="stat-value">{{ session_correct }}/{{ session_total }}</div>
+      <div class="stat-label">Score</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">{{ pct }}%</div>
+      <div class="stat-label">Accuracy</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">{{ time_used }} / 130:00</div>
+      <div class="stat-label">Time Used</div>
+    </div>
+  </div>
+
+  <p style="color:var(--muted);font-size:13px;margin-bottom:32px">
+    AWS uses scaled scoring; 72% is an approximation.
+  </p>
   <a href="/menu" class="btn btn-primary">Back to Menu</a>
 </div>
 {% endblock %}""")
@@ -768,6 +832,9 @@ def quiz_start():
     progress.current_session_total = 0
     save_progress(progress, str(progress_path))
 
+    # Clear any previous exam timer
+    session.pop("exam_end", None)
+
     if mode == "random":
         q_list = questions.copy()
         random.shuffle(q_list)
@@ -784,6 +851,11 @@ def quiz_start():
             session["flash_msg"] = f"No questions found for domain: {domain}"
             return redirect(url_for("menu"))
         random.shuffle(q_list)
+    elif mode == "exam":
+        pool = questions.copy()
+        random.shuffle(pool)
+        q_list = pool[:65]
+        session["exam_end"] = time.time() + 130 * 60
     else:
         q_list = questions.copy()
 
@@ -829,6 +901,7 @@ def quiz_question():
         idx=pos,
         total=len(indices),
         progress_pct=progress_pct,
+        exam_end=session.get("exam_end"),
     )
     return render_template_string(QUESTION_TEMPLATE, **ctx)
 
@@ -837,6 +910,9 @@ def quiz_question():
 def quiz_answer():
     if not _require_cert() or "quiz_indices" not in session:
         return redirect(url_for("cert_picker"))
+
+    if session.get("exam_end") and time.time() > session["exam_end"]:
+        return redirect(url_for("quiz_complete"))
 
     questions, progress = load_all()
     if questions is None:
@@ -924,6 +1000,24 @@ def quiz_complete():
     questions, progress = load_all()
     if questions is None:
         return redirect(url_for("cert_picker"))
+
+    exam_end = session.pop("exam_end", None)
+    if exam_end:
+        exam_start = exam_end - 130 * 60
+        time_used_s = min(130 * 60, time.time() - exam_start)
+        used_m, used_s = int(time_used_s // 60), int(time_used_s % 60)
+        pct = round(progress.current_session_correct / progress.current_session_total * 100
+                    if progress.current_session_total > 0 else 0)
+        ctx = get_progress_ctx(progress, questions)
+        ctx.update(
+            session_correct=progress.current_session_correct,
+            session_total=progress.current_session_total,
+            pct=pct,
+            passed=pct >= 72,
+            time_used=f"{used_m}:{used_s:02d}",
+        )
+        return render_template_string(EXAM_COMPLETE_TEMPLATE, **ctx)
+
     pct = round(progress.current_session_correct / progress.current_session_total * 100
                 if progress.current_session_total > 0 else 0)
     ctx = get_progress_ctx(progress, questions)
